@@ -1,0 +1,5 @@
+---
+# tasks file for akshit1
+- include_tasks: install.yml
+- include_tasks: configure.yml
+- include_tasks: service.yml
