@@ -1,0 +1,84 @@
+---
+- name: Telegraf play
+  hosts: test-kitchen
+
+  vars:
+    docker_package_version: '*'
+    docker_allow_users: [ telegraf ]
+
+  vars_files:
+    - roles/ansible-telegraf/test/input-plugins-vars.yml
+    - roles/ansible-telegraf/test/output-plugins-vars.yml
+
+  pre_tasks:
+    - name: Copy metrics collector scripts
+      copy:
+        src: roles/ansible-telegraf/test/{{ item }}
+        dest: /opt/{{ item }}
+        owner: root
+        group: root
+        mode:  0755
+      with_items:
+        - metrics.py
+        - kong-metrics-collector.py
+
+  roles:
+    - wunzeco.docker
+    - wunzeco.influxdb
+    - ansible-telegraf
+
+  post_tasks:
+    - name: Start tomcat container (to test http_response plugin)
+      docker_container:
+        name: tomcat
+        image: tomcat
+        published_ports: [ "8888:8080" ]
+        state: started
+    - name: Start kong-dashboard container (to test http_response plugin)
+      docker_container:
+        name: kong-dashboard
+        image: pgbi/kong-dashboard
+        published_ports: [ "8080:8080" ]
+        state: started
+
+    - name: Start kong-database container (postgres)
+      docker_container:
+        name: kong-database
+        image: "postgres:9.5"
+        published_ports: [ "5432:5432" ]
+        env:
+          POSTGRES_USER: kong
+          POSTGRES_DB: kong
+        state: started
+      register: db
+
+    - name: Run kong database migration
+      docker_container:
+        name: kong-database-migration
+        image: "kong"
+        command: kong migrations up
+        env:
+          KONG_DATABASE: postgres
+          KONG_PG_HOST: kong-database
+        links:
+          - kong-database:kong-database
+        state: started
+      when: db|changed
+
+    - pause: seconds=15
+      when: db|changed
+
+    - name: Start kong containter (to test exec plugin for retrieving kong node usage info)
+      docker_container:
+        name: kong
+        image: kong
+        published_ports:
+          - "8000:8000"
+          - "8443:8443"
+          - "8001:8001"
+          - "7946:7946"
+          - "7946:7946/udp"
+        env:
+          KONG_DATABASE: postgres
+          KONG_PG_HOST: kong-database
+        state: started

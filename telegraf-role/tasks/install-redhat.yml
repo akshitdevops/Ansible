@@ -1,0 +1,16 @@
+---
+
+- name: Add InfluxData yum repository file
+  yum_repository:
+    name: influxdb
+    description: "InfluxDB Repository - RHEL"
+    baseurl: "{{ telegraf_yum_repo_baseurl }}"
+    gpgkey: "{{ telegraf_signing_key_url }}"
+    gpgcheck: yes
+    enabled:  yes
+
+- name: Install telegraf
+  yum:
+    name:  "telegraf-{{ telegraf_version|default('*') }}"
+    update_cache: yes
+    state: present
